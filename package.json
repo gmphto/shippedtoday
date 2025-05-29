@@ -9,11 +9,12 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.8",
+    "date-fns": "^2.30.0",
     "next": "14.0.0",
     "react": "^18",
     "react-dom": "^18",
-    "zod": "^3.22.4",
-    "date-fns": "^2.30.0"
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/node": "^20",
@@ -26,4 +27,4 @@
     "tailwindcss": "^3.3.0",
     "typescript": "^5"
   }
-} 
+}

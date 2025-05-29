@@ -1,2 +1,10 @@
 [
+  {
+    "id": "launch_1748538271549_we3o4m1fi",
+    "title": "Test Launch",
+    "url": "https://example.com",
+    "description": "A test description for debugging",
+    "tags": [],
+    "submittedAt": "2025-05-29T17:04:31.549Z"
+  }
 ]

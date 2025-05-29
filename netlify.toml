@@ -2,8 +2,8 @@
   # Build command for Next.js
   command = "npm run build"
   
-  # Output directory for static files
-  publish = ".next"
+  # Let Netlify handle the publish directory automatically for Next.js
+  # publish = "out"  # Commented out to let @netlify/plugin-nextjs handle it
 
 [build.environment]
   # Node.js version
@@ -12,27 +12,18 @@
   # Next.js specific
   NEXT_TELEMETRY_DISABLED = "1"
 
-# Next.js API routes as Netlify functions
+# Next.js plugin for Netlify - this handles API routes automatically
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Redirect rules for client-side routing
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/___netlify-handler"
-  status = 200
-
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
-  conditions = {Role = ["admin"]}
+# The plugin handles API route redirects automatically, so we don't need manual redirects
 
 # SPA fallback for client-side routing
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+  force = false
 
 # Headers for security
 [[headers]]
@@ -66,6 +57,7 @@
 # Environment-specific settings
 [context.production]
   command = "npm run build"
+  environment = { NODE_ENV = "production" }
 
 [context.deploy-preview]
   command = "npm run build"

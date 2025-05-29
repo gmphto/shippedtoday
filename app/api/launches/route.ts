@@ -1,10 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
 import { z } from 'zod';
 import { LaunchSchema, LaunchSubmissionSchema } from '../../launches/types';
 
-const LAUNCHES_FILE_PATH = path.join(process.cwd(), 'public', 'launches.json');
+// In-memory storage for Netlify (will reset between deployments)
+// For production, you'd want to use a proper database like Supabase, PlanetScale, etc.
+let launches: z.infer<typeof LaunchSchema>[] = [];
+
+// Initialize launches from file if it exists (development) or start empty (production)
+async function initializeLaunches() {
+  if (launches.length === 0) {
+    try {
+      // Try to read from file system (works in development)
+      const { promises: fs } = await import('fs');
+      const path = await import('path');
+      const LAUNCHES_FILE_PATH = path.join(process.cwd(), 'public', 'launches.json');
+      
+      const fileContents = await fs.readFile(LAUNCHES_FILE_PATH, 'utf8');
+      const existingLaunches = JSON.parse(fileContents);
+      const validatedLaunches = z.array(LaunchSchema).parse(existingLaunches);
+      launches = validatedLaunches;
+      console.log(`📁 Loaded ${launches.length} launches from file`);
+    } catch (error) {
+      // File doesn't exist or can't be read (normal in production)
+      console.log('📝 Starting with empty launches (file not found or not accessible)');
+      launches = [];
+    }
+  }
+}
 
 // Enhanced rate limiting - more restrictive for spam prevention
 const submitAttempts = new Map<string, { count: number; lastAttempt: number }>();
@@ -149,10 +171,8 @@ function recordAttempt(clientId: string): void {
 // GET /api/launches - Read all launches
 export async function GET() {
   try {
-    const fileContents = await fs.readFile(LAUNCHES_FILE_PATH, 'utf8');
-    const launches = JSON.parse(fileContents);
-    const validatedLaunches = z.array(LaunchSchema).parse(launches);
-    const sortedLaunches = sortLaunchesByNewest(validatedLaunches);
+    await initializeLaunches();
+    const sortedLaunches = sortLaunchesByNewest(launches);
     
     return NextResponse.json({
       launches: sortedLaunches,
@@ -169,7 +189,12 @@ export async function GET() {
 
 // POST /api/launches - Submit new launch (with enhanced anti-spam measures)
 export async function POST(request: NextRequest) {
+  console.log('🚀 POST /api/launches called');
+  console.log('Request headers:', Object.fromEntries(request.headers.entries()));
+  
   try {
+    await initializeLaunches();
+    
     // Security: Check request origin for same-origin requests
     const origin = request.headers.get('origin');
     const host = request.headers.get('host');
@@ -254,41 +279,11 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Security: Check file permissions before reading
-    try {
-      await fs.access(LAUNCHES_FILE_PATH, fs.constants.R_OK | fs.constants.W_OK);
-    } catch {
-      console.error('File permission check failed');
-      return NextResponse.json(
-        { error: 'File access denied' },
-        { status: 500 }
-      );
-    }
-    
-    // Read existing launches
-    const fileContents = await fs.readFile(LAUNCHES_FILE_PATH, 'utf8');
-    const existingLaunches = JSON.parse(fileContents);
-    const validatedExisting = z.array(LaunchSchema).parse(existingLaunches);
-    
-    // Security: Limit total number of launches to prevent file bloat
-    const MAX_LAUNCHES = 1000;
-    if (validatedExisting.length >= MAX_LAUNCHES) {
-      return NextResponse.json(
-        { error: 'Maximum number of launches reached' },
-        { status: 507 }
-      );
-    }
-    
     // Create new launch with sanitized content
     const newLaunch = createLaunchFromSubmission(validatedSubmission);
     
     // Add to beginning of array (newest first)
-    const updatedLaunches = [newLaunch, ...validatedExisting];
-    
-    // Security: Atomic write operation
-    const tempFilePath = `${LAUNCHES_FILE_PATH}.tmp`;
-    await fs.writeFile(tempFilePath, JSON.stringify(updatedLaunches, null, 2));
-    await fs.rename(tempFilePath, LAUNCHES_FILE_PATH);
+    launches = [newLaunch, ...launches];
     
     // Update tracking for anti-spam measures
     lastGlobalSubmission = Date.now();
@@ -318,9 +313,13 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json(newLaunch, { status: 201 });
   } catch (error) {
-    console.error('Failed to submit launch:', error);
+    console.error('❌ Failed to submit launch:', error);
+    console.error('Error type:', typeof error);
+    console.error('Error constructor:', error?.constructor?.name);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     
     if (error instanceof z.ZodError) {
+      console.error('Zod validation errors:', error.errors);
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },
         { status: 400 }

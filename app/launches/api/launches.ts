@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { LaunchSchema, type Launch, type LaunchSubmission } from '../types';
+import { supabase, DatabaseLaunchSchema } from './supabase';
 
 // API response schemas
 export const LaunchesResponseSchema = z.object({
@@ -9,44 +10,85 @@ export const LaunchesResponseSchema = z.object({
 
 export type LaunchesResponse = z.infer<typeof LaunchesResponseSchema>;
 
-// Data access functions using centralized API
+// Pure function to convert database launch to app launch
+// Pure function
+function convertDatabaseLaunchToLaunch(dbLaunch: any): z.infer<typeof LaunchSchema> {
+  return {
+    id: dbLaunch.id,
+    title: dbLaunch.title,
+    url: dbLaunch.url,
+    description: dbLaunch.description,
+    tags: dbLaunch.tags || [],
+    submittedAt: dbLaunch.submitted_at,
+  };
+}
+
+// Data access functions using Supabase
 export async function getAllLaunches(): Promise<z.infer<typeof LaunchesResponseSchema>> {
   try {
-    const response = await fetch('/api/launches', {
-      cache: 'no-store', // Always get fresh data
-    });
+    console.log('📡 Fetching launches from Supabase...');
     
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    const { data, error } = await supabase
+      .from('launches')
+      .select('*')
+      .order('submitted_at', { ascending: false });
+
+    if (error) {
+      console.error('❌ Supabase error:', error);
+      throw new Error(`Database error: ${error.message}`);
     }
+
+    if (!data) {
+      console.log('📭 No launches found');
+      return { launches: [], total: 0 };
+    }
+
+    console.log(`✅ Fetched ${data.length} launches from Supabase`);
     
-    const data = await response.json();
-    return LaunchesResponseSchema.parse(data);
+    // Convert database format to app format
+    const launches = data.map(convertDatabaseLaunchToLaunch);
+    
+    return { launches, total: launches.length };
   } catch (error) {
-    console.error('Failed to fetch launches:', error);
+    console.error('💥 Failed to fetch launches:', error);
     return { launches: [], total: 0 };
   }
 }
 
 export async function submitLaunch(submission: LaunchSubmission): Promise<z.infer<typeof LaunchSchema>> {
+  console.log('📤 submitLaunch called with:', submission);
+  
   try {
-    const response = await fetch('/api/launches', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(submission),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    const { data, error } = await supabase
+      .from('launches')
+      .insert([
+        {
+          title: submission.title,
+          url: submission.url,
+          description: submission.description,
+          tags: submission.tags,
+          tweet_url: submission.tweetUrl || null,
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Supabase insert error:', error);
+      throw new Error(`Database error: ${error.message}`);
     }
+
+    if (!data) {
+      throw new Error('No data returned from database');
+    }
+
+    console.log('✅ Successfully created launch in Supabase:', data);
     
-    const newLaunch = await response.json();
+    // Convert database format to app format
+    const newLaunch = convertDatabaseLaunchToLaunch(data);
     return LaunchSchema.parse(newLaunch);
   } catch (error) {
-    console.error('Failed to submit launch:', error);
+    console.error('💥 Failed to submit launch:', error);
     throw error; // Re-throw to let the UI handle the error
   }
 } 

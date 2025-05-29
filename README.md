@@ -130,4 +130,38 @@ Deploy to Vercel by connecting your Git repository.
 
 ## 📄 License
 
-MIT License - feel free to use this project as a starting point for your own community platform! 
+MIT License - feel free to use this project as a starting point for your own community platform!
+
+## Netlify Deployment
+
+This app is configured to work with Netlify's serverless functions. The key differences from a traditional server setup:
+
+### Storage Approach
+- **Development**: Uses `public/launches.json` file for data persistence
+- **Production (Netlify)**: Uses in-memory storage that resets between deployments
+- **Limitation**: Data submitted to the live site will be lost when Netlify redeploys
+
+### For Production Use
+To make this production-ready with persistent data, consider these options:
+
+1. **Supabase** (Recommended): Free PostgreSQL database with excellent Next.js integration
+2. **PlanetScale**: Serverless MySQL platform 
+3. **Netlify Functions + External DB**: Keep current setup but add a database
+4. **Netlify Blobs**: For simple file storage (if you want to keep the JSON approach)
+
+### Deployment Configuration
+- Uses `@netlify/plugin-nextjs` for automatic API route handling
+- No manual function configuration needed
+- Automatic serverless function deployment for `/api/*` routes
+
+## Development
+
+```bash
+npm run dev
+```
+
+## Build
+
+```bash
+npm run build
+``` 

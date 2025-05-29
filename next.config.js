@@ -1,8 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    appDir: true,
-  },
+  // Remove deprecated appDir setting (it's default in Next.js 14)
+  
+  // Configure for Netlify deployment
+  trailingSlash: false,
+  
   async headers() {
     return [
       {
