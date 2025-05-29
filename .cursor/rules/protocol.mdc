@@ -1,0 +1,281 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+vars:
+  allowed_lenses: ["dashboard", "history", "customers", "staff", "warehouse", "catalog", "editor", "users"]
+  banned_ui_terms: ["card", "list", "table", "widget", "view", "grid", "panel"]
+  domains: ["prompt", "tag", "search", "user"]
+  mutating_array_methods: ["sort", "push", "pop", "shift", "unshift", "splice", "reverse", "fill"]
+  computation_hooks: ["useMemo", "useCallback"]
+  max_component_lines: 80
+  ui_responsibilities: ["search", "sort", "filter", "list", "item", "empty", "loading", "pagination", "header", "footer", "action"]
+
+# 1. On every run/chat, output all rules being enforced
+on_start:
+  run: |
+    echo "Cursor active rules:"
+    echo "1. Folder naming: actor/lens enforced"
+    echo "2. Zod schema typing required for domain data"
+    echo "3. No cross-lens imports inside components"
+    echo "4. Ban structural UI naming in files and components"
+    echo "5. Avoid redundant domain prefixes in component names"
+    echo "6. Commit message prefix by lens"
+    echo "7. Nesting doctrine version update required on new lens"
+    echo "8. Data transformation functions typed with Zod"
+    echo "9. Pure functions must create copies instead of mutating data"
+    echo "10. Pure functions must have Zod-validated return types"
+    echo "11. Custom hooks must be in hooks directories with proper typing"
+    echo "12. Array operations in components must be memoized"
+    echo "13. Hook names must follow lens/actor convention"
+    echo "14. Hook schemas must use standard suffixes"
+    echo "15. Hooks must provide documentation and proper typing"
+    echo "16. Memoization must be properly commented"
+    echo "17. Components over {{max_component_lines}} lines must be split"
+    echo "18. Child components must follow parent lens naming (e.g., CatalogItem)"
+    echo "19. UI primitives must be extracted to child components"
+    echo "20. Component props must use Zod schemas"
+    echo "21. Child components should have clear responsibility in name"
+
+# 2. For every rule violation, output example of the correct pattern
+
+# Example for folder naming
+folder: app/*/components/*
+  must_be_one_of: "{{allowed_lenses}}"
+  error: |
+    Folder names under components must be meaningful domain actors or lenses, no UI primitives.
+    Example valid names: {{allowed_lenses | join(", ")}}
+    Example invalid: cards, lists, widgets, tables
+
+# Domain data types must use Zod schemas
+file:
+  pattern: "app/*/**/*.{ts,tsx}"
+  rules:
+    - match: /(?<!z\.infer)<[A-Z][a-zA-Z0-9]+>/
+      error: |
+        Domain data types must be derived from Zod schemas using `z.infer<typeof Schema>`.
+        No raw interfaces or types allowed for domain data objects.
+
+    - match: /const\s+[A-Z][a-zA-Z0-9]+Schema\s*=\s*z\.object/
+      file_location_not_in: ["app/*/api/", "app/*/state/"]
+      error: "Domain schemas (Schema suffix) must only be defined under api/ or state/ folders."
+
+# Ban structural UI naming in file names
+file:
+  pattern: "app/*/components/**/*.{ts,tsx,js,jsx}"
+  match_filename: "(?i)(prompt({{banned_ui_terms | join('|')}})|{{banned_ui_terms | join('|')}})(s)?\\.(ts|tsx|js|jsx)$"
+  error: |
+    Structural UI naming banned in file names (e.g. list.tsx, PromptList.tsx, tableView.tsx).
+    Use domain actor/lens names instead, like PromptCatalog.tsx, CustomerDashboard.tsx or OrderHistoryView.tsx.
+
+# Prevent redundant domain prefixes
+file:
+  pattern: "app/{{domains | join('|')}}/components/*/*.{ts,tsx}"
+  match_filename: "(?i){{domains | join('|')}}([A-Z][a-zA-Z0-9]*)\\.(ts|tsx)$"
+  error: |
+    Redundant domain prefix in component name.
+    When a component is already in a domain folder like app/prompts/components/catalog/,
+    the component shouldn't have the domain name as prefix.
+    Use 'Catalog.tsx' instead of 'PromptCatalog.tsx'.
+
+# Ban UI structure names in component names
+file:
+  pattern: "app/*/components/**/*.{ts,tsx,js,jsx}"
+  match: /function\s+([A-Z][a-zA-Z0-9]*(?:{{banned_ui_terms | join('|')}}))\(/i
+  error: |
+    Component names must not use UI structure names ({{banned_ui_terms | join(', ')}}).
+    Use domain actor/lens focused names instead.
+
+# No cross-lens imports
+file:
+  pattern: "app/*/components/*/**/*.tsx"
+  match: /from\s+['"]\.\.\/(?!\1)[^\/]+/
+  error: "No cross-lens imports allowed between component folders. Keep lenses isolated."
+
+# Ban structural UI naming in paths
+file:
+  pattern: "app/*/**/*.{ts,tsx,js,jsx,json}"
+  match: /\/(cards|lists|widgets|tables)\/|\/(cards|lists|widgets|tables)(\/|$)/
+  error: "Structural UI naming banned. Use domain actor or lens naming only."
+
+# Commit message format
+commit_message:
+  match: ^[a-z]+(\[(dashboard|history|customers|staff|warehouse|catalog|editor|users)\])?:
+  error: |
+    Commit messages must prefix with domain lens in square brackets, e.g.:
+    domain[lens]: your message
+    where lens is one of {{allowed_lenses | join(", ")}}
+
+# Nesting doctrine version
+folder:
+  pattern: "app/*/components/*"
+  on_new_folder:
+    check_version_file: "app/*/.nesting-doctrine-version"
+    error: "Adding new lens folders requires updating .nesting-doctrine-version file."
+
+# Pure functions
+file:
+  pattern: "app/*/**/*.{ts,tsx}"
+  rules:
+    - match: /function\s+\w+.*\).*:\s*(?!z\.infer<typeof\s+\w+Schema>).+{/
+      error: |
+        Function return types must be Zod-validated using z.infer<typeof SomeSchema>.
+        Example: function processData(data: Input): z.infer<typeof OutputSchema> { ... }
+    
+    - match: /\.({{mutating_array_methods | join('|')}})\(/
+      not_match_prev_lines: /\[\.\.\./
+      error: |
+        Array methods that mutate the original array must first create a copy using [...array].
+        Example: return [...data].sort() instead of data.sort()
+        This applies to: {{mutating_array_methods | join(', ')}}
+    
+    - match: /function\s+\w+.*\s*{[^}]*\w+\.\w+\s*=[^=][^}]*}/
+      error: |
+        Pure functions should not modify properties of input parameters.
+        Create a copy or a new object instead of modifying inputs.
+
+# Documentation for pure functions
+file:
+  pattern: "app/*/**/*.{ts,tsx}"
+  match: /function\s+\w+.*:\s*z\.infer<typeof\s+\w+Schema>/
+  not_match_prev_lines: /\/\/\s*Pure\s+function/
+  error: |
+    Pure functions should be documented with a "// Pure function" comment above the declaration.
+    Example:
+    // Pure function
+    function processData(data: Input): z.infer<typeof OutputSchema> { ... }
+
+# Custom hooks
+file:
+  pattern: "app/**/hooks/use*.{ts,tsx}"
+  rules:
+    - match: /export\s+function\s+use[A-Z]/
+      not_match_next_lines: /:\s*z\.infer<typeof\s+\w+ReturnSchema>/
+      error: |
+        Custom hooks must define return types using Zod schemas.
+        Example: 
+        export function useMyHook(...): z.infer<typeof MyHookReturnSchema> { ... }
+    
+    - match: /function\s+use[A-Z][a-zA-Z]+\(/
+      not_match_prev_lines: /\/\/\s+Hook\s+for/
+      error: |
+        Custom hooks should have documentation describing their purpose.
+        Example:
+        // Hook for managing user authentication state
+        export function useAuth(...) { ... }
+    
+    - match: /export\s+function\s+use[A-Z]/
+      not_match_body: /const\s+\[\w+,\s*set\w+\]\s*=\s*useState/
+      not_match_body: /return\s*{/
+      error: |
+        Custom hooks should manage state with useState and return an object with named properties.
+        This makes the hook's API clear and allows destructuring.
+
+# Memoization in hooks
+file:
+  pattern: "app/**/*.{tsx,ts}"
+  rules:
+    - match: /\.(filter|map|reduce|flatMap)\(/
+      not_match_prev_lines: /useMemo|useCallback/
+      error: |
+        Array operations inside components should be memoized with useMemo or useCallback.
+        Example: 
+        const filteredItems = useMemo(() => items.filter(...), [items]);
+    
+    - match: /{{computation_hooks | join('|')}}\(\(\)\s*=>\s*\{[^}]+return/
+      error: |
+        Complex computations in useMemo/useCallback should be extracted to pure functions.
+        Example:
+        // Pure function
+        function computeValue(data) { ... }
+        
+        // In component
+        const result = useMemo(() => computeValue(data), [data]);
+
+# Hook folder structure
+folder:
+  pattern: "app/*/components/*/hooks"
+  must_exist: true
+  error: |
+    Each component lens should have a hooks directory for custom hooks.
+    Component-specific hooks should be placed in app/domain/components/lens/hooks/
+    Example: app/prompts/components/catalog/hooks/usePromptFiltering.ts
+
+# Hook naming conventions
+file:
+  pattern: "app/{{domains | join('|')}}/components/*/hooks/use*.{ts,tsx}"
+  match_filename: "(?i)use{{domains | join('|')}}([A-Z][a-zA-Z0-9]*)\\.(ts|tsx)$"
+  error: |
+    Hook names should not repeat the domain name.
+    When a hook is already in a domain folder like app/prompts/components/catalog/hooks/,
+    use 'useCatalogX.ts' instead of 'usePromptCatalogX.ts'.
+    This avoids redundancy and follows the actor/lens naming convention.
+
+# Component organization
+folder:
+  pattern: "app/*/components/*/components"
+  must_exist: true
+  error: |
+    Each lens component should have a 'components' subdirectory for child components.
+    Create this directory to organize related child components.
+    Example: app/prompts/components/catalog/components/
+
+# Component size limit
+file:
+  pattern: "app/*/components/**/*.{tsx}"
+  match: /export\s+(default\s+)?function\s+[A-Z][a-zA-Z]*\(/
+  lines_count_max: "{{max_component_lines}}"
+  error: |
+    Component is too large (over {{max_component_lines}} lines). Split it into smaller components.
+    Move functionality to child components in the 'components' subdirectory.
+
+# Child component naming
+file:
+  pattern: "app/*/components/*/components/*.{tsx}"
+  match_filename: "^(?!{{allowed_lenses | join('|')}})([A-Z][a-zA-Z0-9]*)\\.(tsx)$"
+  error: |
+    Child component name must include the parent lens name as prefix.
+    Example: For catalog lens, use CatalogItem.tsx, CatalogSearch.tsx, etc.
+
+# Props schema enforcement
+file:
+  pattern: "app/*/components/*/components/*.{tsx}"
+  match: /export\s+function\s+[A-Z][a-zA-Z]*\(/
+  not_match_prev_lines: /export\s+const\s+\w+PropsSchema\s*=/
+  error: |
+    Every component must define and export a Props schema with Zod.
+    Example:
+    ```
+    export const ComponentNamePropsSchema = z.object({...});
+    type ComponentNameProps = z.infer<typeof ComponentNamePropsSchema>;
+    export function ComponentName(props: ComponentNameProps) {...}
+    ```
+
+# Types organization
+file:
+  pattern: "app/*/**/*.{ts,tsx}"
+  not_pattern: "app/*/types.ts"
+  rules:
+    - match: /export\s+type\s+([A-Z][a-zA-Z0-9]*)\s*=/
+      not_match: /export\s+type\s+[A-Z][a-zA-Z0-9]*(Props|Return|Input|Output|Config|Response)\s*=/
+      error: |
+        Domain types must be defined in the domain's types.ts file.
+        Return types, props types, and other function-specific types can remain with their functions.
+        Move this type definition to app/{domain}/types.ts.
+        Example:
+        ```
+        // In app/prompts/types.ts
+        export type Prompt = z.infer<typeof promptSchema>;
+        ```
+
+# 3. On violation, fail hard and stop execution
+on_violation:
+  run: exit 1
+
+
+
+
+
+
+
