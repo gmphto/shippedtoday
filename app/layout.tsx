@@ -49,7 +49,7 @@ export default function RootLayout({
           
           <footer className="bg-white border-t border-gray-200 mt-16">
             <div className="max-w-4xl mx-auto px-4 py-8 text-center text-gray-600">
-              <p>&copy; 2024 ShippedToday. Built for the community.</p>
+              <p>&copy; 2025 ShippedToday. Built for the community.</p>
             </div>
           </footer>
         </div>
