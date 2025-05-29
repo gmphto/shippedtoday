@@ -1,9 +1,6 @@
 [build]
   # Build command for Next.js
   command = "npm run build"
-  
-  # Let Netlify handle the publish directory automatically for Next.js
-  # publish = "out"  # Commented out to let @netlify/plugin-nextjs handle it
 
 [build.environment]
   # Node.js version
@@ -15,8 +12,6 @@
 # Next.js plugin for Netlify - this handles API routes automatically
 [[plugins]]
   package = "@netlify/plugin-nextjs"
-
-# The plugin handles API route redirects automatically, so we don't need manual redirects
 
 # SPA fallback for client-side routing
 [[redirects]]
@@ -63,19 +58,4 @@
   command = "npm run build"
 
 [context.branch-deploy]
-  command = "npm run build"
-
-# Form handling (if needed for future features)
-[build.processing]
-  skip_processing = false
-
-[build.processing.css]
-  bundle = true
-  minify = true
-
-[build.processing.js]
-  bundle = true
-  minify = true
-
-[build.processing.html]
-  pretty_urls = true 
+  command = "npm run build" 
